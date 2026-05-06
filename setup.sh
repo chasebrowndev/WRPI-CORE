@@ -46,20 +46,29 @@ python3 -m venv "$WEAVER_DIR/venv"
 "$WEAVER_DIR/venv/bin/pip" install --quiet textual tomli
 
 # ── Tools directory ───────────────────────────────────────────────────────────
-echo "[3/5] Installing tools..."
+echo "[3/5] Setting up tools directory..."
 mkdir -p "$TOOLS_DIR"
 
-# Copy tools from repo into place (skip if already there)
-for tool_src in "$REPO_DIR/tools"/*/; do
-    tool_name="$(basename "$tool_src")"
-    tool_dst="$TOOLS_DIR/$tool_name"
-    if [ ! -d "$tool_dst" ]; then
-        cp -r "$tool_src" "$tool_dst"
-        echo "  + $tool_name"
-    else
-        echo "  ~ $tool_name (already exists, skipping)"
-    fi
-done
+echo ""
+read -p "  Install the basic tool suite from WRPI-TOOLS? [y/N] " install_tools
+if [[ "$install_tools" == "y" || "$install_tools" == "Y" ]]; then
+    TOOLS_TMP=$(mktemp -d)
+    git clone --depth=1 https://github.com/chasebrowndev/WRPI-TOOLS "$TOOLS_TMP" 2>&1
+    for tool_src in "$TOOLS_TMP"/*/; do
+        tool_name="$(basename "$tool_src")"
+        tool_dst="$TOOLS_DIR/$tool_name"
+        if [ ! -d "$tool_dst" ]; then
+            cp -r "$tool_src" "$tool_dst"
+            echo "  + $tool_name"
+        else
+            echo "  ~ $tool_name (already exists, skipping)"
+        fi
+    done
+    rm -rf "$TOOLS_TMP"
+else
+    echo "  ~ Skipping. Clone https://github.com/chasebrowndev/WRPI-TOOLS later."
+fi
+echo ""
 
 chown -R "$USER:$USER" "$WEAVER_DIR"
 
