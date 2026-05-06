@@ -1,0 +1,11 @@
+# Tool config — generated at runtime, not committed
+tools/*/config.toml
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# OS
+.DS_Store
