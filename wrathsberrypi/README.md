@@ -28,7 +28,7 @@ The TUI launches automatically.
 
 - `rpi-usb-gadget` handles all USB gadget setup (ECM for Linux, RNDIS for Windows, HID). We don't touch it.
 - `setup.sh` installs Python/Textual, drops the TUI, and hooks it to SSH login.
-- Tools live in `/opt/weaver/tools/<toolname>/`.
+- Tools live in `~/.wrath/tools/<toolname>/`.
 
 ---
 

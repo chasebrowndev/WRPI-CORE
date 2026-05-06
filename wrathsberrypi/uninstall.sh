@@ -12,7 +12,7 @@ echo ""
 echo "  ◈ wrathsberrypi uninstaller"
 echo ""
 echo "  This will remove:"
-echo "    /opt/weaver/ (TUI, venv, all tools)"
+echo "    $HOME/.wrath/ (TUI, venv, all tools)"
 echo "    SSH login hook from ~/.bashrc"
 echo "    Boot config changes (optional)"
 echo ""
@@ -55,9 +55,9 @@ if grep -q "wrathsberrypi" "$BASHRC" 2>/dev/null; then
 fi
 
 # ── Weaver directory ───────────────────────────────────────────────────────────
-if [ -d "/opt/weaver" ]; then
-    rm -rf /opt/weaver
-    echo "  - Removed /opt/weaver"
+if [ -d "$HOME/.wrath" ]; then
+    rm -rf $HOME/.wrath
+    echo "  - Removed $HOME/.wrath"
 fi
 
 # ── Done ───────────────────────────────────────────────────────────────────────

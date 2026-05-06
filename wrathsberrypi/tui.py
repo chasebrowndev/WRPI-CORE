@@ -1,4 +1,4 @@
-#!/opt/weaver/venv/bin/python3
+#!/usr/bin/env python3
 """
 wrathsberrypi TUI — modular tool launcher.
 Arrow keys + enter to navigate. b=shell, r=refresh, q=quit.
@@ -24,7 +24,7 @@ except ImportError:
     except ImportError:
         tomllib = None
 
-TOOLS_DIR = Path("/opt/weaver/tools")
+TOOLS_DIR = Path.home() / ".wrath/tools"
 
 # ── Theme ─────────────────────────────────────────────────────────────────────
 # Edit these two to reskin the entire TUI.
@@ -205,7 +205,7 @@ class WeaverApp(App):
         lv = self.query_one("#tool-list", ListView)
         lv.clear()
         if not self.tools:
-            lv.mount(Static("  No tools found in /opt/weaver/tools/"))
+            lv.mount(Static("  No tools found in ~/.wrath/tools/"))
         else:
             for tool in self.tools:
                 lv.mount(ToolItem(tool))
@@ -273,11 +273,11 @@ class WeaverApp(App):
         confirm = input("  This will remove all of wrathsberrypi. Are you sure? [y/N] ").strip().lower()
         if confirm == "y":
             import shutil
-            uninstall = Path("/opt/weaver/../../../") / "uninstall.sh"
+            uninstall = Path.home() / ".wrath/uninstall.sh"
             # Try repo path first, fall back to bundled copy
             candidates = [
                 Path.home() / "wrathsberrypi/uninstall.sh",
-                Path("/opt/weaver/uninstall.sh"),
+                Path.home() / ".wrath/uninstall.sh",
             ]
             script = next((p for p in candidates if p.exists()), None)
             if script:
