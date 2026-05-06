@@ -4,12 +4,12 @@
 
 set -e
 
-WEAVER_DIR="$HOME/.wrath"
+USER="${SUDO_USER:-weaver}"
+HOME_DIR="/home/$USER"
+WEAVER_DIR="$HOME_DIR/.wrath"
 TOOLS_DIR="$WEAVER_DIR/tools"
 TUI_SCRIPT="$WEAVER_DIR/tui.py"
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
-USER="${SUDO_USER:-weaver}"
-HOME_DIR="/home/$USER"
 
 echo "=== wrathsberrypi setup ==="
 
@@ -78,7 +78,7 @@ BLOCK='
 # wrathsberrypi — launch TUI on interactive SSH login
 if [[ -n "$SSH_CONNECTION" ]] && [[ $- == *i* ]] && [[ -z "$WEAVER_SHELL" ]]; then
     export WEAVER_SHELL=1
-    $HOME/.wrath/venv/bin/python3 $HOME/.wrath/tui.py
+    $HOME_DIR/.wrath/venv/bin/python3 $HOME_DIR/.wrath/tui.py
 fi
 '
 
@@ -94,11 +94,11 @@ echo ""
 echo "=== Done ==="
 echo ""
 echo "  SSH:    ssh weaver@weaver.local"
-echo "  Tools:  $HOME/.wrath/tools/"
+echo "  Tools:  $HOME_DIR/.wrath/tools/"
 echo "  TUI:    auto-launches on SSH login"
 echo ""
 echo "  To add a tool later:"
-echo "    cp -r tools/mytool $HOME/.wrath/tools/"
+echo "    cp -r tools/mytool $HOME_DIR/.wrath/tools/"
 echo ""
 echo "  Reboot to apply."
 echo ""
