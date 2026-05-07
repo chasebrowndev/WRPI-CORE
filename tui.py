@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 wrathsberrypi TUI — modular tool launcher.
-↑↓ navigate · enter launch · b shell · r refresh · q quit
 """
 
 import sys
@@ -55,6 +54,7 @@ Screen {{
 
 #list-panel {{
     width: 36;
+    height: 1fr;
     border-right: solid {BORDER};
 }}
 
@@ -65,8 +65,8 @@ ListView {{
 
 ListItem {{
     background: {BG};
-    padding: 0 1;
-    height: 4;
+    height: 3;
+    padding: 0 0;
     border-bottom: solid {BG_RAISED};
 }}
 
@@ -82,52 +82,64 @@ ListItem.--highlight {{
 .item-name {{
     color: {MAIN};
     text-style: bold;
-    padding: 1 1 0 1;
+    padding: 0 2;
+    height: 1;
 }}
 
-.item-desc {{
+.item-sub {{
     color: {DIM2};
-    padding: 0 1;
+    padding: 0 2;
+    height: 1;
 }}
 
-.item-badge {{
-    color: {DIM};
-    padding: 0 1;
-}}
-
-.item-badge-ready {{
+.badge-ready {{
     color: {MAIN};
-    padding: 0 1;
+}}
+
+.badge-pending {{
+    color: {DIM};
 }}
 
 #detail-panel {{
     width: 1fr;
+    height: 1fr;
     padding: 2 3;
     background: {BG};
 }}
 
-#detail-name {{
+.detail-field {{
+    height: auto;
+    margin-bottom: 1;
+}}
+
+#d-name {{
     color: {MAIN};
     text-style: bold;
+    height: auto;
+    margin-bottom: 0;
 }}
 
-#detail-version {{
+#d-meta {{
     color: {DIM};
+    height: auto;
     margin-bottom: 1;
 }}
 
-#detail-desc {{
+#d-desc {{
     color: {DIM2};
+    height: auto;
     margin-bottom: 1;
 }}
 
-#detail-status {{
+#d-status {{
     color: {MAIN};
+    height: auto;
     margin-bottom: 1;
 }}
 
-#detail-action {{
+#d-hint {{
     color: {DIM};
+    height: auto;
 }}
 
 #statusbar {{
@@ -191,36 +203,31 @@ class ToolItem(ListItem):
         m    = self.tool["manifest"]
         name = m.get("name", self.tool["path"].name)
         desc = m.get("description", "")
-        desc = (desc[:28] + "…") if len(desc) > 30 else desc
+        desc = (desc[:30] + "…") if len(desc) > 32 else desc
 
         if self.tool["ready"]:
-            badge     = "● ready"
-            badge_cls = "item-badge-ready"
+            badge = f"[{MAIN}]●[/{MAIN}] ready"
         elif self.tool["has_installer"]:
-            badge     = "○ needs setup"
-            badge_cls = "item-badge"
+            badge = f"[{DIM}]○[/{DIM}] needs setup"
         else:
-            badge     = "○ no installer"
-            badge_cls = "item-badge"
+            badge = f"[{DIM}]○[/{DIM}] no installer"
 
-        yield Label(name,  classes="item-name")
-        yield Label(desc,  classes="item-desc")
-        yield Label(badge, classes=badge_cls)
+        yield Label(f" {name}", classes="item-name")
+        yield Label(f" {desc}  {badge}", classes="item-sub")
 
 
 class WeaverApp(App):
     CSS = CSS
     BINDINGS = [
-        Binding("enter",  "launch",  "Launch"),
-        Binding("b",      "shell",   "Shell"),
-        Binding("r",      "refresh", "Refresh"),
-        Binding("q",      "quit",    "Quit"),
+        Binding("b", "shell",   "Shell"),
+        Binding("r", "refresh", "Refresh"),
+        Binding("q", "quit",    "Quit"),
     ]
 
     def __init__(self):
         super().__init__()
         self.tools: list[dict] = []
-        self._selected: int = 0   # track index ourselves
+        self._sel: int = 0
 
     def compose(self) -> ComposeResult:
         yield Static("  ◈  WRATHSBERRY PI  ◈", id="header")
@@ -228,43 +235,53 @@ class WeaverApp(App):
             with Vertical(id="list-panel"):
                 yield ListView(id="lv")
             with Vertical(id="detail-panel"):
-                yield Static("", id="detail-name")
-                yield Static("", id="detail-version")
-                yield Static("", id="detail-desc")
-                yield Static("", id="detail-status")
-                yield Static("", id="detail-action")
+                yield Static("", id="d-name")
+                yield Static("", id="d-meta")
+                yield Static("", id="d-desc")
+                yield Static("", id="d-status")
+                yield Static("", id="d-hint")
         yield Static("", id="statusbar")
         yield Footer()
 
     def on_mount(self) -> None:
         self._load_tools()
 
-    # ── Tool loading ───────────────────────────────────────────────────────────
+    # ── Loading ────────────────────────────────────────────────────────────────
 
     def _load_tools(self) -> None:
         self.tools = discover_tools()
         lv = self.query_one("#lv", ListView)
-        lv.clear()
-        if self.tools:
-            for tool in self.tools:
-                lv.mount(ToolItem(tool))
-            # restore or clamp selection
-            self._selected = min(self._selected, len(self.tools) - 1)
-            lv.index = self._selected
-            self._show_detail(self.tools[self._selected])
-        else:
-            self._clear_detail()
-        self._update_bar()
 
-    # ── Detail panel ──────────────────────────────────────────────────────────
+        # Remove existing items safely
+        for child in list(lv.children):
+            child.remove()
+
+        if not self.tools:
+            self._clear_detail()
+            self._update_bar()
+            return
+
+        for tool in self.tools:
+            lv.append(ToolItem(tool))
+
+        self._sel = min(self._sel, len(self.tools) - 1)
+
+        # Set index after DOM settles
+        def _restore():
+            lv.index = self._sel
+            self._show_detail(self.tools[self._sel])
+            self._update_bar()
+
+        self.call_after_refresh(_restore)
+
+    # ── Detail ─────────────────────────────────────────────────────────────────
 
     def _clear_detail(self) -> None:
-        for wid in ("detail-name", "detail-version", "detail-desc",
-                    "detail-status", "detail-action"):
-            self.query_one(f"#{wid}", Static).update("")
-        self.query_one("#detail-name", Static).update(
-            "No tools found.\n\nDrop tool folders into ~/.wrath/tools/ and press [r]."
-        )
+        self.query_one("#d-name",   Static).update("No tools found.")
+        self.query_one("#d-meta",   Static).update("")
+        self.query_one("#d-desc",   Static).update("Drop tool folders into ~/.wrath/tools/ and press [r].")
+        self.query_one("#d-status", Static).update("")
+        self.query_one("#d-hint",   Static).update("")
 
     def _show_detail(self, tool: dict) -> None:
         m       = tool["manifest"]
@@ -273,32 +290,32 @@ class WeaverApp(App):
         version = m.get("version",     "?")
         author  = m.get("author",      "")
 
-        ver_line = f"v{version}"
+        meta = f"v{version}"
         if author:
-            ver_line += f"  ·  {author}"
+            meta += f"  ·  {author}"
         if m.get("requires_root"):
-            ver_line += "  ·  requires sudo"
-
-        if tool["ready"]:
-            status = "● Ready"
-            action = "Press Enter to launch."
-        elif tool["has_installer"]:
-            status = "○ Not installed"
-            action = "Press Enter to install, then launch."
-        else:
-            status = "○ No installer"
-            action = "Add an install.sh to set this tool up."
+            meta += "  ·  requires sudo"
 
         if not tool["has_main"]:
-            action = "⚠  No main.py — cannot run."
+            status = "⚠  No main.py"
+            hint   = "This tool cannot be launched."
+        elif tool["ready"]:
+            status = "● Ready"
+            hint   = "Press Enter to launch."
+        elif tool["has_installer"]:
+            status = "○ Not installed"
+            hint   = "Press Enter to run installer, then launch."
+        else:
+            status = "○ No installer"
+            hint   = "Add an install.sh to this tool's folder."
 
-        self.query_one("#detail-name",    Static).update(name)
-        self.query_one("#detail-version", Static).update(ver_line)
-        self.query_one("#detail-desc",    Static).update(desc)
-        self.query_one("#detail-status",  Static).update(status)
-        self.query_one("#detail-action",  Static).update(action)
+        self.query_one("#d-name",   Static).update(name)
+        self.query_one("#d-meta",   Static).update(meta)
+        self.query_one("#d-desc",   Static).update(desc)
+        self.query_one("#d-status", Static).update(status)
+        self.query_one("#d-hint",   Static).update(hint)
 
-    # ── Status bar ────────────────────────────────────────────────────────────
+    # ── Status bar ─────────────────────────────────────────────────────────────
 
     def _update_bar(self, msg: str = "") -> None:
         bar = self.query_one("#statusbar", Static)
@@ -307,21 +324,30 @@ class WeaverApp(App):
         else:
             total = len(self.tools)
             ready = sum(1 for t in self.tools if t["ready"])
-            bar.update(f"  {total} tool{'s' if total != 1 else ''}  ·  {ready} ready")
+            bar.update(f"  {total} tool{'s' if total != 1 else ''}  ·  {ready} ready  ·  enter=launch")
 
-    # ── Events ────────────────────────────────────────────────────────────────
+    # ── Events ─────────────────────────────────────────────────────────────────
 
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
         if event.item and isinstance(event.item, ToolItem):
-            self._selected = self.tools.index(event.item.tool)
-            self._show_detail(event.item.tool)
+            # Find by path, not dict identity
+            path = event.item.tool["path"]
+            for i, t in enumerate(self.tools):
+                if t["path"] == path:
+                    self._sel = i
+                    self._show_detail(t)
+                    break
 
-    # ── Actions ───────────────────────────────────────────────────────────────
+    def on_list_view_selected(self, event: ListView.Selected) -> None:
+        # ListView fires Selected on Enter — use this instead of Binding("enter")
+        if event.item and isinstance(event.item, ToolItem):
+            path = event.item.tool["path"]
+            for t in self.tools:
+                if t["path"] == path:
+                    self._run_tool(t)
+                    break
 
-    def action_launch(self) -> None:
-        if not self.tools:
-            return
-        self._run_tool(self.tools[self._selected])
+    # ── Actions ────────────────────────────────────────────────────────────────
 
     def _run_tool(self, tool: dict) -> None:
         path    = tool["path"]
@@ -334,7 +360,6 @@ class WeaverApp(App):
         try:
             os.system("clear")
 
-            # Install
             if not config.exists():
                 if not install.exists():
                     print(f"\n\033[38;5;196m◈ {name}: no install.sh found.\033[0m")
@@ -348,12 +373,8 @@ class WeaverApp(App):
                     print(f"\n\033[38;5;196m◈ Setup failed (exit {result.returncode}).\033[0m")
                     input("\n  Press Enter to return...")
                     return
-                print(f"\n\033[38;5;208m◈ Setup complete.\033[0m\n")
-                if not main.exists():
-                    input("\n  Press Enter to return...")
-                    return
+                print(f"\n\033[38;5;208m◈ Done.\033[0m\n")
 
-            # Run
             if not main.exists():
                 print(f"\n\033[38;5;196m◈ {name}: no main.py found.\033[0m")
                 input("\n  Press Enter to return...")
@@ -365,7 +386,8 @@ class WeaverApp(App):
 
         finally:
             self.resume()
-            self._load_tools()
+            # Reload after resume so DOM is stable
+            self.call_after_refresh(self._load_tools)
 
     def action_shell(self) -> None:
         self.suspend()
@@ -376,7 +398,6 @@ class WeaverApp(App):
 
     def action_refresh(self) -> None:
         self._load_tools()
-        self._update_bar("Refreshed.")
 
     def action_quit(self) -> None:
         self.exit()
