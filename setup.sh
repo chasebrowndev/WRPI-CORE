@@ -43,7 +43,7 @@ apt-get install -y -qq python3 python3-pip python3-venv openssh-server git curl
 echo "[2/5] Setting up Python environment..."
 mkdir -p "$WEAVER_DIR"
 python3 -m venv "$WEAVER_DIR/venv"
-"$WEAVER_DIR/venv/bin/pip" install --quiet textual tomli
+"$WEAVER_DIR/venv/bin/pip" install --quiet rich tomli
 
 # ── Tools directory ───────────────────────────────────────────────────────────
 echo "[3/5] Setting up tools directory..."
