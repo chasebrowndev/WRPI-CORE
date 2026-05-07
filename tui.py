@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """
 wrathsberrypi TUI — modular tool launcher.
-Arrow keys + enter to navigate. b=shell, r=refresh, q=quit.
-
-Theme: edit MAIN and ACCENT below to reskin.
+↑↓ navigate · enter launch · b shell · r refresh · q quit
 """
 
 import sys
@@ -13,8 +11,9 @@ from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.widgets import ListView, ListItem, Label, Static
-from textual.containers import Vertical
+from textual.containers import Horizontal, Vertical
 from textual.binding import Binding
+from textual.reactive import reactive
 
 try:
     import tomllib
@@ -26,12 +25,9 @@ except ImportError:
 
 TOOLS_DIR = Path.home() / ".wrath/tools"
 
-# ── Theme ─────────────────────────────────────────────────────────────────────
-# Edit these two to reskin the entire TUI.
-MAIN   = "#ff6a00"   # primary text, highlights, selected border
-ACCENT = "#ff2200"   # status indicators, key hints, dim elements
-
-# Derived shades — adjust if needed
+# ── Theme ──────────────────────────────────────────────────────────────────────
+MAIN       = "#ff6a00"
+ACCENT     = "#ff2200"
 BG         = "#0d0000"
 BG_RAISED  = "#1a0500"
 BG_SELECT  = "#2d0800"
@@ -39,40 +35,43 @@ BORDER     = "#3d0a00"
 BORDER_HL  = "#8b1a00"
 DIM        = "#7a2a00"
 DIM2       = "#994400"
-# ─────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────────
 
 CSS = f"""
 Screen {{
     background: {BG};
+    layout: vertical;
 }}
 
-#title {{
+#header {{
     height: 3;
     background: {BG_RAISED};
     border-bottom: solid {BORDER_HL};
     color: {MAIN};
     text-style: bold;
     content-align: center middle;
-    padding: 0 2;
 }}
 
-#subtitle {{
-    color: {DIM};
-    content-align: center middle;
-    padding-bottom: 1;
-    height: 2;
+#body {{
+    layout: horizontal;
+    height: 1fr;
 }}
 
 #tool-list {{
+    width: 40;
     background: {BG};
-    border: solid {BORDER};
-    margin: 0 4 1 4;
-    padding: 1 2;
+    border-right: solid {BORDER};
+    padding: 0 0;
+}}
+
+ListView {{
+    background: {BG};
 }}
 
 ListItem {{
     background: {BG};
-    padding: 1 2;
+    padding: 0 2;
+    height: 3;
     border-bottom: solid {BG_RAISED};
 }}
 
@@ -85,25 +84,58 @@ ListItem.--highlight {{
     border-left: solid {MAIN};
 }}
 
-.tool-name {{
+.item-name {{
     color: {MAIN};
     text-style: bold;
 }}
 
-.tool-desc {{
+.item-meta {{
     color: {DIM2};
-    text-style: italic;
 }}
 
-.tool-status-installed {{
-    color: {ACCENT};
+.item-badge-ready {{
+    color: {MAIN};
 }}
 
-.tool-status-new {{
+.item-badge-new {{
     color: {DIM};
 }}
 
-#status {{
+#detail-panel {{
+    width: 1fr;
+    background: {BG};
+    padding: 2 3;
+}}
+
+#detail-name {{
+    color: {MAIN};
+    text-style: bold;
+    height: 2;
+}}
+
+#detail-desc {{
+    color: {DIM2};
+    height: 2;
+}}
+
+#detail-meta {{
+    color: {DIM};
+    height: 1;
+}}
+
+#detail-status {{
+    color: {MAIN};
+    height: 2;
+    margin-top: 1;
+}}
+
+#detail-hint {{
+    color: {DIM};
+    margin-top: 2;
+    height: 3;
+}}
+
+#statusbar {{
     height: 1;
     background: {BG_RAISED};
     border-top: solid {BORDER_HL};
@@ -127,7 +159,7 @@ Footer > .footer--key {{
 def load_manifest(tool_path: Path) -> dict:
     manifest = tool_path / "manifest.toml"
     if not manifest.exists():
-        return {"name": tool_path.name, "description": "no manifest", "version": "?"}
+        return {"name": tool_path.name, "description": "", "version": "?", "author": ""}
     if tomllib is None:
         data = {}
         for line in manifest.read_text().splitlines():
@@ -145,10 +177,13 @@ def discover_tools() -> list[dict]:
     tools = []
     for entry in sorted(TOOLS_DIR.iterdir()):
         if entry.is_dir() and not entry.name.startswith("_"):
+            manifest = load_manifest(entry)
             tools.append({
                 "path": entry,
-                "manifest": load_manifest(entry),
-                "installed": (entry / "config.toml").exists(),
+                "manifest": manifest,
+                "ready": (entry / "config.toml").exists(),
+                "has_installer": (entry / "install.sh").exists(),
+                "has_main": (entry / "main.py").exists(),
             })
     return tools
 
@@ -162,14 +197,18 @@ class ToolItem(ListItem):
         m = self.tool["manifest"]
         name = m.get("name", self.tool["path"].name)
         desc = m.get("description", "")
-        if self.tool["installed"]:
-            status, cls = "● configured", "tool-status-installed"
+        short_desc = (desc[:28] + "…") if len(desc) > 30 else desc
+
+        if self.tool["ready"]:
+            badge, badge_cls = "● ready", "item-badge-ready"
+        elif self.tool["has_installer"]:
+            badge, badge_cls = "○ needs setup", "item-badge-new"
         else:
-            status, cls = "○ not configured", "tool-status-new"
+            badge, badge_cls = "○ no installer", "item-badge-new"
+
         yield Vertical(
-            Label(f"  {name}", classes="tool-name"),
-            Label(f"  {desc}", classes="tool-desc"),
-            Label(f"  {status}", classes=cls),
+            Label(f" {name}", classes="item-name"),
+            Label(f" {short_desc}  [{badge}]", classes=f"item-meta {badge_cls}"),
         )
 
 
@@ -177,11 +216,10 @@ class WeaverApp(App):
     CSS = CSS
     TITLE = "WEAVER"
     BINDINGS = [
-        Binding("q", "quit", "Quit"),
-        Binding("b", "shell", "Shell"),
         Binding("enter", "launch", "Launch"),
+        Binding("b", "shell", "Shell"),
         Binding("r", "refresh", "Refresh"),
-        Binding("ctrl+x", "uninstall", "Uninstall"),
+        Binding("q", "quit", "Quit"),
     ]
 
     def __init__(self):
@@ -189,109 +227,143 @@ class WeaverApp(App):
         self.tools: list[dict] = []
 
     def compose(self) -> ComposeResult:
-        yield Static("  ◈ WRATHSBERRY PI  //  TOOL CONTROL  ◈", id="title")
-        yield Static(
-            "  ↑↓ navigate  ·  enter launch  ·  b shell  ·  r refresh  ·  q quit",
-            id="subtitle",
-        )
-        yield ListView(id="tool-list")
-        yield Static("", id="status")
+        yield Static("  ◈  W R A T H S B E R R Y P I  ◈", id="header")
+        with Horizontal(id="body"):
+            with Vertical(id="tool-list"):
+                yield ListView(id="lv")
+            with Vertical(id="detail-panel"):
+                yield Static("", id="detail-name")
+                yield Static("", id="detail-desc")
+                yield Static("", id="detail-meta")
+                yield Static("", id="detail-status")
+                yield Static("", id="detail-hint")
+        yield Static("", id="statusbar")
 
     def on_mount(self) -> None:
         self._load_tools()
 
     def _load_tools(self) -> None:
         self.tools = discover_tools()
-        lv = self.query_one("#tool-list", ListView)
+        lv = self.query_one("#lv", ListView)
         lv.clear()
         if not self.tools:
-            lv.mount(Static("  No tools found in ~/.wrath/tools/"))
+            lv.mount(Static("  No tools in ~/.wrath/tools/", classes="item-meta"))
+            self._clear_detail()
         else:
             for tool in self.tools:
                 lv.mount(ToolItem(tool))
-        self._set_status()
+        self._update_statusbar()
 
-    def _set_status(self, msg: str = "") -> None:
-        bar = self.query_one("#status", Static)
+    def _update_statusbar(self, msg: str = "") -> None:
+        bar = self.query_one("#statusbar", Static)
         if msg:
             bar.update(f"  {msg}")
         else:
             total = len(self.tools)
-            configured = sum(1 for t in self.tools if t["installed"])
-            bar.update(f"  {total} tools  ·  {configured} configured")
+            ready = sum(1 for t in self.tools if t["ready"])
+            bar.update(f"  {total} tool{'s' if total != 1 else ''}  ·  {ready} ready")
+
+    def _clear_detail(self) -> None:
+        self.query_one("#detail-name",   Static).update("")
+        self.query_one("#detail-desc",   Static).update("")
+        self.query_one("#detail-meta",   Static).update("")
+        self.query_one("#detail-status", Static).update("")
+        self.query_one("#detail-hint",   Static).update("")
+
+    def _show_detail(self, tool: dict) -> None:
+        m = tool["manifest"]
+        name    = m.get("name", tool["path"].name)
+        desc    = m.get("description", "no description")
+        version = m.get("version", "?")
+        author  = m.get("author", "")
+        meta    = f"v{version}"
+        if author:
+            meta += f"  ·  {author}"
+
+        if tool["ready"]:
+            status = "● Ready to launch"
+            hint   = "Press [enter] to run."
+        elif tool["has_installer"]:
+            status = "○ Not set up yet"
+            hint   = "Press [enter] to run the installer, then launch."
+        else:
+            status = "○ No installer found"
+            hint   = "Drop an install.sh into this tool's folder to enable setup."
+
+        if not tool["has_main"]:
+            hint += "\n  ⚠ No main.py — tool will not run."
+
+        self.query_one("#detail-name",   Static).update(f"  {name}")
+        self.query_one("#detail-desc",   Static).update(f"  {desc}")
+        self.query_one("#detail-meta",   Static).update(f"  {meta}")
+        self.query_one("#detail-status", Static).update(f"\n  {status}")
+        self.query_one("#detail-hint",   Static).update(f"\n  {hint}")
 
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
         if event.item and isinstance(event.item, ToolItem):
-            name = event.item.tool["manifest"].get("name", "")
-            self._set_status(f"selected: {name}")
+            self._show_detail(event.item.tool)
+            self._update_statusbar(event.item.tool["manifest"].get("name", ""))
+        else:
+            self._clear_detail()
 
     def action_launch(self) -> None:
-        lv = self.query_one("#tool-list", ListView)
+        lv = self.query_one("#lv", ListView)
         item = lv.highlighted_child
         if item and isinstance(item, ToolItem):
             self._run_tool(item.tool)
 
     def _run_tool(self, tool: dict) -> None:
-        path = tool["path"]
+        path    = tool["path"]
         config  = path / "config.toml"
         install = path / "install.sh"
         main    = path / "main.py"
+        name    = tool["manifest"].get("name", path.name)
 
         self.suspend()
         try:
-            if not config.exists() and install.exists():
-                print(f"\n\033[38;5;208m◈ Installing {tool['manifest'].get('name', path.name)}...\033[0m\n")
-                r = subprocess.run(["bash", str(install)], cwd=str(path))
-                if r.returncode != 0:
-                    print(f"\n\033[38;5;196m◈ Installer failed (exit {r.returncode})\033[0m")
-                    input("\nPress Enter to return...")
-                    return
-                print(f"\n\033[38;5;208m◈ Done. Launching...\033[0m\n")
+            os.system("clear")
 
-            if main.exists():
-                subprocess.run([sys.executable, str(main)], cwd=str(path))
-            else:
-                print(f"\n\033[38;5;196m◈ No main.py in {path}\033[0m")
-                input("\nPress Enter to return...")
+            # ── Install phase ──────────────────────────────────────────────
+            if not config.exists() and install.exists():
+                print(f"\n\033[38;5;208m◈ Setting up {name}...\033[0m\n")
+                result = subprocess.run(["bash", str(install)], cwd=str(path))
+                if result.returncode != 0:
+                    print(f"\n\033[38;5;196m◈ Setup failed (exit {result.returncode}).\033[0m")
+                    input("\n  Press Enter to return to Weaver...")
+                    return
+                print(f"\n\033[38;5;208m◈ Setup complete. Launching {name}...\033[0m\n")
+
+            # ── Run phase ──────────────────────────────────────────────────
+            if not main.exists():
+                print(f"\n\033[38;5;196m◈ {name} has no main.py.\033[0m")
+                print(f"  Add a main.py to {path} to make this tool runnable.")
+                input("\n  Press Enter to return to Weaver...")
+                return
+
+            venv_python = Path.home() / ".wrath/venv/bin/python3"
+            python = str(venv_python) if venv_python.exists() else sys.executable
+            subprocess.run([python, str(main)], cwd=str(path))
+
         finally:
             self.resume()
             self._load_tools()
+            lv = self.query_one("#lv", ListView)
+            for i, t in enumerate(self.tools):
+                if t["path"] == tool["path"]:
+                    lv.index = i
+                    self._show_detail(t)
+                    break
 
     def action_shell(self) -> None:
         self.suspend()
-        print("\n\033[38;5;208m◈ Shell. Type 'exit' to return to Weaver.\033[0m\n")
+        os.system("clear")
+        print("\033[38;5;208m◈ Weaver shell. Type 'exit' to return.\033[0m\n")
         subprocess.run([os.environ.get("SHELL", "/bin/bash")])
         self.resume()
 
     def action_refresh(self) -> None:
         self._load_tools()
-        self._set_status("refreshed.")
-
-    def action_uninstall(self) -> None:
-        self.suspend()
-        print("\n\033[38;5;196m◈ Uninstall wrathsberrypi\033[0m\n")
-        confirm = input("  This will remove all of wrathsberrypi. Are you sure? [y/N] ").strip().lower()
-        if confirm == "y":
-            import shutil
-            uninstall = Path.home() / ".wrath/uninstall.sh"
-            # Try repo path first, fall back to bundled copy
-            candidates = [
-                Path.home() / "wrathsberrypi/uninstall.sh",
-                Path.home() / ".wrath/uninstall.sh",
-            ]
-            script = next((p for p in candidates if p.exists()), None)
-            if script:
-                subprocess.run(["sudo", "bash", str(script)])
-            else:
-                print("\n  \033[38;5;196mCould not find uninstall.sh.\033[0m")
-                print("  Run manually: sudo bash ~/wrathsberrypi/uninstall.sh")
-                input("\n  Press Enter to return...")
-                self.resume()
-                return
-        else:
-            print("  Aborted.")
-            input("\n  Press Enter to return...")
-        self.resume()
+        self._update_statusbar("refreshed.")
 
     def action_quit(self) -> None:
         self.exit()
