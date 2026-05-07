@@ -1,6 +1,6 @@
 # wrathsberrypi
 
-Modular USB dongle framework for the Raspberry Pi Zero 2W.
+Modular USB dongle framework for the Raspberry Pi 5.
 
 Plug into a machine → SSH in over USB-ethernet → fire-themed TUI launches → run your tools.
 
@@ -9,15 +9,15 @@ Plug into a machine → SSH in over USB-ethernet → fire-themed TUI launches �
 ## Deploy
 
 ```bash
-git clone https://github.com/chasebrowndev/wrathsberrypi
-cd wrathsberrypi
+git clone https://github.com/chasebrowndev/WRPI-CORE
+cd WRPI-CORE
 sudo bash setup.sh
 ```
 
 Then reboot. SSH in from the host machine:
 
 ```bash
-ssh weaver@weaver.local
+ssh <username>@<hostname>.local
 ```
 
 The TUI launches automatically.
@@ -26,8 +26,8 @@ The TUI launches automatically.
 
 ## How it works
 
-- `rpi-usb-gadget` handles all USB gadget setup (ECM for Linux, RNDIS for Windows, HID). We don't touch it.
-- `setup.sh` installs Python/Textual, drops the TUI, and hooks it to SSH login.
+- Downloaded tools are sorted into categories specified in their metadata.
+- If no category is specified they are thrown in general.
 - Tools live in `~/.wrath/tools/<toolname>/`.
 
 ---
@@ -52,36 +52,22 @@ See `tools/_example/` for a minimal working template.
 
 ---
 
-## Included tools
+## Basic tool suit
 
-| Tool | Description |
-|------|-------------|
-| `tailscale` | Join the Pi to your Tailnet for remote access from anywhere |
+- Tailscale | for use with your tailnet.
+- Tailnet Forwarding | Shares tailnet connection with host device.
+- usb-gadget | Activates gadget mode, a dep for many other tools.
 
 ---
 
 ## TUI keybinds
 
-| Key | Action |
-|-----|--------|
-| `↑ ↓` | Navigate |
-| `Enter` | Launch selected tool |
-| `r` | Refresh tool list |
-| `b` | Drop to bash shell |
-| `q` | Quit TUI |
+- Arrow keys | Menu nav
+- Enter | Interact
+- r | refresh
+- s | drop to shell
+- b | back
+- q | quit
+
 
 ---
-
-## Tailscale (post-setup)
-
-```bash
-sudo tailscale up
-```
-
-Opens an auth URL — open it on any device logged into your Tailscale account. After that the Pi stays on your tailnet across reboots.
-
-From school or anywhere:
-
-```bash
-ssh weaver@weaver.tail<xxxxx>.ts.net
-```
