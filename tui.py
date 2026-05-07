@@ -21,6 +21,8 @@ except ImportError:
         tomllib = None
 
 TOOLS_DIR = Path.home() / ".wrath/tools"
+
+os.environ.setdefault("TERM", "xterm-256color")
 console   = Console()
 
 O  = "#ff6a00"   # orange
@@ -139,7 +141,7 @@ def run_tool(tool: dict) -> None:
     main    = path / "main.py"
     name    = tool["manifest"].get("name", path.name)
 
-    os.system("clear")
+    print("\033[2J\033[H", end="", flush=True)
 
     # Install phase
     if not config.exists():
@@ -172,7 +174,7 @@ def run_tool(tool: dict) -> None:
 
 
 def shell() -> None:
-    os.system("clear")
+    print("\033[2J\033[H", end="", flush=True)
     console.print(f"  [{O}]◈ Weaver shell — type 'exit' to return.[/{O}]\n", highlight=False)
     subprocess.run([os.environ.get("SHELL", "/bin/bash")])
 
@@ -188,7 +190,7 @@ def main() -> None:
         except (EOFError, KeyboardInterrupt):
             break
 
-        os.system("clear")
+        print("\033[2J\033[H", end="", flush=True)
 
         if raw == "q":
             break
@@ -196,7 +198,7 @@ def main() -> None:
             shell()
             categories = discover_tools()
         elif raw == "r":
-            os.system("clear")
+            print("\033[2J\033[H", end="", flush=True)
             categories = discover_tools()
         elif raw.isdigit():
             idx = int(raw) - 1
@@ -213,10 +215,10 @@ def main() -> None:
                     except (EOFError, KeyboardInterrupt):
                         break
 
-                    os.system("clear")
+                    print("\033[2J\033[H", end="", flush=True)
 
                     if raw2 == "q":
-                        os.system("clear")
+                        print("\033[2J\033[H", end="", flush=True)
                         sys.exit(0)
                     elif raw2 == "b":
                         break
@@ -237,7 +239,7 @@ def main() -> None:
         elif raw:
             pass  # unknown input, redraw
 
-    os.system("clear")
+    print("\033[2J\033[H", end="", flush=True)
 
 
 if __name__ == "__main__":
