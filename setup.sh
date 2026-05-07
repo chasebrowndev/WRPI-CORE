@@ -83,16 +83,16 @@ chown "$USER:$USER" "$TUI_SCRIPT" "$WEAVER_DIR/uninstall.sh"
 echo "[5/5] Wiring TUI to SSH login..."
 
 BASHRC="$HOME_DIR/.bashrc"
-BLOCK='
+
+if ! grep -q "wrathsberrypi" "$BASHRC" 2>/dev/null; then
+    cat >> "$BASHRC" << EOF
+
 # wrathsberrypi — launch TUI on interactive SSH login
-if [[ -n "$SSH_CONNECTION" ]] && [[ $- == *i* ]] && [[ -z "$WEAVER_SHELL" ]]; then
+if [[ -n "\$SSH_CONNECTION" ]] && [[ \$- == *i* ]] && [[ -z "\$WEAVER_SHELL" ]]; then
     export WEAVER_SHELL=1
     $HOME_DIR/.wrath/venv/bin/python3 $HOME_DIR/.wrath/tui.py
 fi
-'
-
-if ! grep -q "wrathsberrypi" "$BASHRC" 2>/dev/null; then
-    echo "$BLOCK" >> "$BASHRC"
+EOF
 fi
 chown "$USER:$USER" "$BASHRC"
 
