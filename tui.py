@@ -43,29 +43,64 @@ def load_manifest(tool_path: Path) -> dict:
         return tomllib.load(f)
 
 
-def discover_tools() -> list[dict]:
+def discover_tools() -> dict[str, list[dict]]:
+    """
+    Returns an ordered dict of { category_name: [tool, ...] }
+    preserving first-seen category order. Tools without a category go to "General".
+    """
     if not TOOLS_DIR.exists():
-        return []
-    tools = []
+        return {}
+
+    grouped: dict[str, list] = {}
     for entry in sorted(TOOLS_DIR.iterdir()):
         if entry.is_dir() and not entry.name.startswith("_"):
-            tools.append({
+            tool = {
                 "path":          entry,
                 "manifest":      load_manifest(entry),
                 "ready":         (entry / "config.toml").exists(),
                 "has_installer": (entry / "install.sh").exists(),
                 "has_main":      (entry / "main.py").exists(),
-            })
-    return tools
+            }
+            cat = tool["manifest"].get("category", "General")
+            if cat not in grouped:
+                grouped[cat] = []
+            grouped[cat].append(tool)
+
+    return grouped
 
 
-def draw(tools: list[dict]) -> None:
+def draw_categories(categories: dict[str, list[dict]]) -> None:
     os.system("clear")
     console.print(f"\n  [bold {O}]◈  WRATHSBERRY PI[/bold {O}]\n", highlight=False)
 
-    if not tools:
+    if not categories:
         console.print(f"  [{D}]No tools found in ~/.wrath/tools/[/{D}]\n")
         return
+
+    table = Table(
+        box=box.SIMPLE,
+        show_header=False,
+        padding=(0, 2),
+        expand=False,
+    )
+    table.add_column(style=f"bold {D2}", width=4)   # index
+    table.add_column(style=f"bold {O}",  width=22)  # category name
+    table.add_column(style=D2)                       # tool count
+
+    for i, (cat, tools) in enumerate(categories.items(), 1):
+        count = f"[{D}]{len(tools)} tool{'s' if len(tools) != 1 else ''}[/{D}]"
+        table.add_row(str(i), cat, count)
+
+    console.print(table)
+    console.print(
+        f"  [{D}]enter number to open  ·  s=shell  ·  r=refresh  ·  q=quit[/{D}]\n",
+        highlight=False,
+    )
+
+
+def draw_tools(cat_name: str, tools: list[dict]) -> None:
+    os.system("clear")
+    console.print(f"\n  [bold {O}]◈  WRATHSBERRY PI[/bold {O}]  [{D2}]›  {cat_name}[/{D2}]\n", highlight=False)
 
     table = Table(
         box=box.SIMPLE,
@@ -94,7 +129,7 @@ def draw(tools: list[dict]) -> None:
 
     console.print(table)
     console.print(
-        f"  [{D}]enter number to launch  ·  s=shell  ·  r=refresh  ·  q=quit[/{D}]\n",
+        f"  [{D}]enter number to launch  ·  b=back  ·  q=quit[/{D}]\n",
         highlight=False,
     )
 
@@ -145,10 +180,10 @@ def shell() -> None:
 
 
 def main() -> None:
-    tools = discover_tools()
+    categories = discover_tools()
 
     while True:
-        draw(tools)
+        draw_categories(categories)
 
         try:
             raw = input("  > ").strip().lower()
@@ -159,19 +194,45 @@ def main() -> None:
             break
         elif raw == "s":
             shell()
-            tools = discover_tools()
+            categories = discover_tools()
         elif raw == "r":
-            tools = discover_tools()
+            categories = discover_tools()
         elif raw.isdigit():
             idx = int(raw) - 1
-            if 0 <= idx < len(tools):
-                run_tool(tools[idx])
-                tools = discover_tools()
+            cat_list = list(categories.items())
+            if 0 <= idx < len(cat_list):
+                cat_name, tools = cat_list[idx]
+
+                # ── Tool-level loop ──────────────────────────────────────────
+                while True:
+                    draw_tools(cat_name, tools)
+
+                    try:
+                        raw2 = input("  > ").strip().lower()
+                    except (EOFError, KeyboardInterrupt):
+                        break
+
+                    if raw2 == "q":
+                        os.system("clear")
+                        sys.exit(0)
+                    elif raw2 == "b":
+                        break
+                    elif raw2.isdigit():
+                        tidx = int(raw2) - 1
+                        if 0 <= tidx < len(tools):
+                            run_tool(tools[tidx])
+                            categories = discover_tools()
+                            tools = categories.get(cat_name, [])
+                        else:
+                            console.print(f"  [red]No tool {raw2}.[/red]")
+                            input("  Press Enter to continue...")
+                    elif raw2:
+                        pass  # unknown input, redraw
             else:
-                console.print(f"  [red]No tool {raw}.[/red]")
+                console.print(f"  [red]No category {raw}.[/red]")
                 input("  Press Enter to continue...")
         elif raw:
-            pass  # ignore unknown input, just redraw
+            pass  # unknown input, redraw
 
     os.system("clear")
 
