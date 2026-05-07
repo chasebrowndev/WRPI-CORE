@@ -70,7 +70,6 @@ def discover_tools() -> dict[str, list[dict]]:
 
 
 def draw_categories(categories: dict[str, list[dict]]) -> None:
-    os.system("clear")
     console.print(f"\n  [bold {O}]◈  WRATHSBERRY PI[/bold {O}]\n", highlight=False)
 
     if not categories:
@@ -99,7 +98,6 @@ def draw_categories(categories: dict[str, list[dict]]) -> None:
 
 
 def draw_tools(cat_name: str, tools: list[dict]) -> None:
-    os.system("clear")
     console.print(f"\n  [bold {O}]◈  WRATHSBERRY PI[/bold {O}]  [{D2}]›  {cat_name}[/{D2}]\n", highlight=False)
 
     table = Table(
@@ -190,12 +188,15 @@ def main() -> None:
         except (EOFError, KeyboardInterrupt):
             break
 
+        os.system("clear")
+
         if raw == "q":
             break
         elif raw == "s":
             shell()
             categories = discover_tools()
         elif raw == "r":
+            os.system("clear")
             categories = discover_tools()
         elif raw.isdigit():
             idx = int(raw) - 1
@@ -211,6 +212,8 @@ def main() -> None:
                         raw2 = input("  > ").strip().lower()
                     except (EOFError, KeyboardInterrupt):
                         break
+
+                    os.system("clear")
 
                     if raw2 == "q":
                         os.system("clear")
